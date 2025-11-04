@@ -302,7 +302,44 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to set role');
+        // Try to get error message from response
+        let errorMessage = 'Failed to set role';
+        let errorData = null;
+        try {
+          errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (parseError) {
+          // If JSON parsing fails, try to get text
+          try {
+            const errorText = await response.text();
+            errorMessage = errorText || errorMessage;
+          } catch (textError) {
+            console.error('Failed to parse error response:', textError);
+          }
+        }
+        
+        const errorDetails = {
+          status: response.status,
+          statusText: response.statusText,
+          message: errorMessage,
+          ...(errorData ? { errorData } : {})
+        };
+        
+        console.error('Role selection failed:', errorDetails);
+        
+        // If authentication is required (401) or user not found, clear tokens
+        if (response.status === 401 || (errorData && errorData.requiresReauth)) {
+          console.log('Clearing tokens due to authentication error');
+          api.clearAuthTokens();
+          setUser(null);
+          setRole(null);
+        }
+        
+        // Create error with more details
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.details = errorDetails;
+        throw error;
       }
 
       const updatedUser = await response.json();
@@ -310,6 +347,11 @@ export const AuthProvider = ({ children }) => {
       setRole(selectedRole);
     } catch (error) {
       console.error("Failed to set role:", error);
+      console.error("Error details:", {
+        message: error?.message,
+        status: error?.status,
+        response: error?.response
+      });
       throw error;
     }
   }, []);

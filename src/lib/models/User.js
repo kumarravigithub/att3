@@ -38,18 +38,48 @@ export async function updateUser(email, updates) {
   const db = getDatabase();
   const users = db.collection(COLLECTION_NAME);
   
-  const result = await users.findOneAndUpdate(
+  console.log('[User.updateUser] Updating user:', { email, updates });
+  
+  // First verify user exists
+  const existingUser = await users.findOne({ email });
+  if (!existingUser) {
+    console.error('[User.updateUser] User not found before update:', email);
+    return null;
+  }
+  
+  console.log('[User.updateUser] User found, proceeding with update');
+  
+  // Use updateOne for more reliable updates
+  const updateResult = await users.updateOne(
     { email },
     { 
       $set: { 
         ...updates, 
         updatedAt: new Date() 
       } 
-    },
-    { returnDocument: 'after' }
+    }
   );
   
-  return result.value;
+  console.log('[User.updateUser] Update operation result:', { 
+    matchedCount: updateResult.matchedCount,
+    modifiedCount: updateResult.modifiedCount,
+    acknowledged: updateResult.acknowledged
+  });
+  
+  if (updateResult.matchedCount === 0) {
+    console.error('[User.updateUser] No document matched for update:', email);
+    return null;
+  }
+  
+  // Fetch the updated document
+  const updatedUser = await users.findOne({ email });
+  console.log('[User.updateUser] Updated user fetched:', { 
+    found: !!updatedUser,
+    email: updatedUser?.email,
+    role: updatedUser?.role 
+  });
+  
+  return updatedUser;
 }
 
 export async function setRefreshToken(email, refreshToken) {
