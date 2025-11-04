@@ -11,9 +11,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const processingSessionRef = React.useRef(null);
   const sessionProcessedRef = React.useRef(null);
+  const initializedRef = React.useRef(false);
 
   useEffect(() => {
     // This effect checks for an existing session token
+    let isMounted = true;
+    
     const initializeAuth = async () => {
       const fetchUserInfo = async () => {
         try {
@@ -21,13 +24,16 @@ export const AuthProvider = ({ children }) => {
           if (!token) {
             throw new Error('No access token found');
           }
+          if (!isMounted) return;
           console.log('Calling getCurrentUser API...');
           const userInfo = await api.getCurrentUser();
+          if (!isMounted) return;
           console.log('User info received:', userInfo);
           setUser(userInfo);
           setRole(userInfo.role || null);
           setLoading(false);
         } catch (error) {
+          if (!isMounted) return;
           console.error("Failed to fetch user info:", error);
           console.error("Error details:", {
             message: error?.message,
@@ -50,8 +56,38 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      // Check if we've already processed a session - if so, don't run again unless URL changed
       const urlParams = new URL(window.location.href).searchParams;
       const sessionId = urlParams.get('sessionId');
+      
+      // If no sessionId in URL and we already have a processed session, just ensure user info is loaded
+      if (!sessionId && sessionProcessedRef.current) {
+        const hasTokens = !!localStorage.getItem('edu-access-token');
+        if (hasTokens && !initializedRef.current) {
+          // Only fetch once if we haven't initialized yet
+          try {
+            await fetchUserInfo();
+            initializedRef.current = true;
+          } catch (error) {
+            if (!isMounted) return;
+            console.error('Failed to fetch user info after processed session:', error);
+            setLoading(false);
+            initializedRef.current = true; // Mark as initialized even on error to prevent retry loop
+          }
+        } else if (!hasTokens) {
+          // No tokens - clear state
+          if (!isMounted) return;
+          setLoading(false);
+          setUser(null);
+          setRole(null);
+          initializedRef.current = true;
+        } else {
+          // Already initialized - ensure loading is false
+          if (!isMounted) return;
+          setLoading(false);
+        }
+        return;
+      }
       
       // Check if we're on the callback route
       const isCallbackRoute = window.location.pathname === '/auth/callback' || 
@@ -60,13 +96,16 @@ export const AuthProvider = ({ children }) => {
       // Also check for error parameters
       const errorParam = urlParams.get('error');
       
-      console.log('Checking OAuth callback:', {
-        pathname: window.location.pathname,
-        search: window.location.search,
-        hasSessionId: !!sessionId,
-        isCallbackRoute,
-        error: errorParam
-      });
+      // Only log if we actually have something to process (sessionId or error)
+      if (sessionId || errorParam || isCallbackRoute) {
+        console.log('Checking OAuth callback:', {
+          pathname: window.location.pathname,
+          search: window.location.search,
+          hasSessionId: !!sessionId,
+          isCallbackRoute,
+          error: errorParam
+        });
+      }
       
       // If there's an error parameter, log it and clear URL
       if (errorParam && !sessionId) {
@@ -80,13 +119,33 @@ export const AuthProvider = ({ children }) => {
       if (sessionId) {
         // Prevent duplicate processing of the same session ID (React StrictMode causes double execution)
         if (sessionProcessedRef.current === sessionId) {
-          console.log('Session ID already processed successfully, skipping duplicate request');
+          // Already processed - just ensure user info is loaded once
+          const hasTokens = !!localStorage.getItem('edu-access-token');
+          if (hasTokens && !initializedRef.current) {
+            try {
+              if (!isMounted) return;
+              const userInfo = await api.getCurrentUser();
+              if (!isMounted) return;
+              setUser(userInfo);
+              setRole(userInfo.role || null);
+              initializedRef.current = true;
+              setLoading(false);
+            } catch (error) {
+              if (!isMounted) return;
+              console.error('Failed to fetch user info after processed session:', error);
+              setLoading(false);
+            }
+          } else {
+            setLoading(false);
+            initializedRef.current = true;
+          }
           return;
         }
         
         // Check if another request is already processing this session ID
         if (processingSessionRef.current === sessionId) {
-          console.log('Session ID is already being processed, skipping duplicate request');
+          // Already processing - wait for it to complete
+          setLoading(false);
           return;
         }
         
@@ -150,6 +209,7 @@ export const AuthProvider = ({ children }) => {
             console.log('User info received:', userInfo);
             setUser(userInfo);
             setRole(userInfo.role || null);
+            initializedRef.current = true;
             setLoading(false);
             // Clear processing flag
             processingSessionRef.current = null;
@@ -235,11 +295,13 @@ export const AuthProvider = ({ children }) => {
 
       // If no OAuth callback, check for existing access token
       const storedToken = localStorage.getItem('edu-access-token');
-      if (storedToken) {
+      if (storedToken && !initializedRef.current) {
         try {
           // Fetch user info from backend
           await fetchUserInfo();
+          initializedRef.current = true;
         } catch (error) {
+          if (!isMounted) return;
           console.error("Auth initialization failed", error);
           // Clear invalid tokens
           api.clearAuthTokens();
@@ -249,10 +311,16 @@ export const AuthProvider = ({ children }) => {
         }
       } else {
         setLoading(false);
+        initializedRef.current = true;
       }
     };
 
     initializeAuth();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = useCallback(() => {
@@ -284,6 +352,9 @@ export const AuthProvider = ({ children }) => {
       api.clearAuthTokens();
       setUser(null);
       setRole(null);
+      initializedRef.current = false;
+      sessionProcessedRef.current = null;
+      processingSessionRef.current = null;
     }
   }, []);
 

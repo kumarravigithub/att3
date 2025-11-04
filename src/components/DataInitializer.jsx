@@ -6,6 +6,9 @@ import { useTest } from '../context/TestContext';
 import { useAttempt } from '../context/AttemptContext';
 import { FullScreenLoader } from './FullScreenLoader';
 
+// Use a module-level map to track initialization across component remounts
+const initializationMap = new Map();
+
 export const DataInitializer = ({ children }) => {
     const { user, loading: authLoading } = useAuth();
     const { load: loadClasses, loading: classesLoading, error: classesError } = useClass();
@@ -18,30 +21,56 @@ export const DataInitializer = ({ children }) => {
     useEffect(() => {
         // Only load data if user is authenticated
         if (authLoading || !user) {
+            setIsInitialized(false);
             return;
         }
 
+        const userId = user.id || user.email || user._id;
+        if (!userId) return;
+        
+        // Check module-level map to see if we've already initialized for this user
+        const existingState = initializationMap.get(userId);
+        
+        if (existingState) {
+            if (existingState.status === 'initialized') {
+                setIsInitialized(true);
+                return;
+            }
+            // If already initializing, wait for it to complete
+            if (existingState.status === 'initializing') {
+                return;
+            }
+        }
+
+        // Mark as initializing in module-level map
+        initializationMap.set(userId, { status: 'initializing' });
+
         const initializeData = async () => {
-            setIsInitialized(false);
             try {
-                // Fetch all data in parallel
-                await Promise.all([
+                await Promise.allSettled([
                     loadClasses(),
                     loadChapters(),
                     loadTests(),
                     loadAttempts(),
                 ]);
+                // Mark as initialized in module-level map
+                initializationMap.set(userId, { status: 'initialized' });
                 setIsInitialized(true);
             } catch (error) {
                 console.error('Data initialization error:', error);
-                setIsInitialized(true); // Still set to true to show error
+                // Still mark as initialized to show error
+                initializationMap.set(userId, { status: 'initialized' });
+                setIsInitialized(true);
             }
         };
+        
         initializeData();
-    }, [user, authLoading, loadClasses, loadChapters, loadTests, loadAttempts]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, user?.email, authLoading]);
 
     const isLoading = authLoading || classesLoading || chaptersLoading || testsLoading || attemptsLoading || !isInitialized;
     const error = classesError || chaptersError || testsError || attemptsError;
+
 
     if (isLoading || !user) {
         return <FullScreenLoader message="Loading your dashboard..." />;
