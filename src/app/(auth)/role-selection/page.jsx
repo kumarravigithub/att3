@@ -19,12 +19,8 @@ const RoleSelectionPage = () => {
     
     try {
       await selectRole(role);
-      // Redirect to appropriate dashboard after role selection
-      if (role === 'teacher') {
-        router.push('/teacher');
-      } else {
-        router.push('/student');
-      }
+      // Redirect to root - the root page will show the appropriate dashboard based on role
+      router.push('/');
     } catch (err) {
       console.error('Error selecting role:', err);
       
