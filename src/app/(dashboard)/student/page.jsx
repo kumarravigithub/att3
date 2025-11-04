@@ -6,6 +6,8 @@ import StudentClassView from '../../../components/StudentClassView';
 import StudentAnalysisDashboard from '../../../components/StudentAnalysisDashboard';
 import TakeTest from '../../../components/TakeTest';
 import { ProfileIcon, ClassesIcon, AnalysisIcon } from '../../../components/icons';
+import { Header } from '../../../components/Header';
+import { DataInitializer } from '../../../components/DataInitializer';
 
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('main');
@@ -59,18 +61,26 @@ const StudentDashboard = () => {
   };
 
   return (
-    <div className="animate-fade-in">
-        <div className="mb-8" role="tablist" aria-label="Student Dashboard">
+    <DataInitializer>
+      <Header />
+      <main className="container mx-auto px-4 py-8 md:py-12">
+        <div className="animate-fade-in">
+          <div className="mb-8" role="tablist" aria-label="Student Dashboard">
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-4 p-2 bg-slate-100 rounded-lg">
-                <TabButton tabId="main" label="Dashboard" icon={<ClassesIcon className="w-5 h-5"/>} />
-                <TabButton tabId="analysis" label="Analysis" icon={<AnalysisIcon className="w-5 h-5"/>} />
-                <TabButton tabId="profile" label="Profile" icon={<ProfileIcon className="w-5 h-5"/>} />
+              <TabButton tabId="main" label="Dashboard" icon={<ClassesIcon className="w-5 h-5"/>} />
+              <TabButton tabId="analysis" label="Analysis" icon={<AnalysisIcon className="w-5 h-5"/>} />
+              <TabButton tabId="profile" label="Profile" icon={<ProfileIcon className="w-5 h-5"/>} />
             </div>
-        </div>
-        <div role="tabpanel">
+          </div>
+          <div role="tabpanel">
             {renderContent()}
+          </div>
         </div>
-    </div>
+      </main>
+      <footer className="text-center py-4 text-slate-500 text-sm">
+        <p>Powered by Google Gemini</p>
+      </footer>
+    </DataInitializer>
   );
 };
 
