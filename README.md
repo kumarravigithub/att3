@@ -121,8 +121,62 @@ The app uses **JWT-based authentication** (not Next.js Auth):
 - Check that `GOOGLE_CALLBACK_URL` matches your Google Cloud Console settings
 
 ### File Upload Error
-- Verify `gcs-service-account.json` exists and has correct permissions
+- **Local Development**: Verify `gcs-service-account.json` exists and has correct permissions
+- **Deployment**: Ensure `GCS_SERVICE_ACCOUNT_JSON` environment variable is set (see Deployment section)
 - Check GCS bucket name and project ID in `.env.local`
+
+## 🚀 Deployment
+
+### Google Cloud Storage Service Account
+
+For **local development**, use the `gcs-service-account.json` file:
+```env
+GCS_KEY_FILENAME=./gcs-service-account.json
+```
+
+For **production deployment**, use the `GCS_SERVICE_ACCOUNT_JSON` environment variable:
+1. Copy the entire contents of `gcs-service-account.json`
+2. Set it as an environment variable (minified JSON, no newlines):
+   ```bash
+   # Example: Convert the JSON file to a single-line string
+   GCS_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...","private_key":"..."}'
+   ```
+
+3. **Platform-specific setup**:
+   - **Vercel**: Add `GCS_SERVICE_ACCOUNT_JSON` in Project Settings → Environment Variables
+   - **Railway/Render**: Add as environment variable in dashboard
+   - **Docker**: Pass via `-e` flag or docker-compose.yml
+   - **Kubernetes**: Use Secrets
+
+**Note**: The code automatically detects which method to use:
+- `GCS_SERVICE_ACCOUNT_JSON` (for deployment) - highest priority
+- `GCS_KEY_FILENAME` (for local dev) - falls back to this
+- `GOOGLE_APPLICATION_CREDENTIALS` (for GCP environments)
+
+### Required Environment Variables for Deployment
+
+```env
+# MongoDB
+MONGODB_URI=your-mongodb-connection-string
+
+# JWT
+JWT_SECRET=your-secret-key
+JWT_REFRESH_SECRET=your-refresh-secret-key
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_CALLBACK_URL=https://your-domain.com/api/auth/google/callback
+
+# Google Gemini
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-pro
+
+# Google Cloud Storage
+GCS_PROJECT_ID=your-project-id
+GCS_BUCKET_NAME=your-bucket-name
+GCS_SERVICE_ACCOUNT_JSON={"type":"service_account",...}  # Full JSON content
+```
 
 ## ✅ Migration Status
 
